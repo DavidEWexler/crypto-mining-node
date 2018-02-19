@@ -78,6 +78,15 @@
     with_items:
          - jq
   
+  - name: Create Install Directory
+    file:
+      path: "{{ install_dir }}"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: 0755
+      state: directory
+    become: yes  
+
   - name: Creating Json Configuration File
     copy:
       content: | 
