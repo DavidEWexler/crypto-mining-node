@@ -26,7 +26,7 @@ of the mining process.  The basic outline of which is:
  
 You can support this project in a number of ways.
 
- * [Patreon](https://www.patreon.com/user?u=6740160)
+ * [Patreon](https://www.patreon.com/davidewexler)
  * BTC/BCH/BTG: ```1N6VY8smni7kNKUoyV6dgmT1rsZYcXJeU5```
  * ETH: ```0x2c1A963C889D3D0979ee1AD4559A6A45a1461Aa5```
  * XMR: ```4JUdGzvrMFDWrUUwY3toJATSeNwjn54LkCnKBPRzDuhzi5vSepHfUckJNxRL2gjkNrSqtCoRUrEDAgRwsQvVCjZbS1rhs5SkvzFNAEDqAe```
