@@ -28,7 +28,7 @@ You can support this project in a number of ways.
 
  * [Patreon](https://www.patreon.com/davidewexler)
  * BTC/BCH/BTG: ```1N6VY8smni7kNKUoyV6dgmT1rsZYcXJeU5```
- * ETH: ```0x2c1A963C889D3D0979ee1AD4559A6A45a1461Aa5```
+ * ETH: ```0x7F41e54aaBfCBAB0f6ED4DAE60Ff15454D7b74f7```
  * XMR: ```4JUdGzvrMFDWrUUwY3toJATSeNwjn54LkCnKBPRzDuhzi5vSepHfUckJNxRL2gjkNrSqtCoRUrEDAgRwsQvVCjZbS1rhs5SkvzFNAEDqAe```
  * ZEC: ```t1Vr9VrkKe5yVbDYKXaivUhUYJzRLgwawfP```
  
