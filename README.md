@@ -24,7 +24,8 @@ of the mining process.  The basic outline of which is:
  4. Wrap everything up in [kubernetes](https://kubernetes.io/)
  5. AWS Remote UI for admining GPU Mining as a service
  
-You can support this project in a number of ways.
+You can support this project in a number of ways, but it is 100% voluntary as all code for this project will be released under
+various open source licenses. 
 
  * [Patreon](https://www.patreon.com/davidewexler)
  * BTC/BCH/BTG: ```1N6VY8smni7kNKUoyV6dgmT1rsZYcXJeU5```
@@ -68,6 +69,12 @@ You can support this project in a number of ways.
    - ```ap```: shortcut for ```ansible-playbook -K```
    - ```watch-miner```: shutcut for ```tail -f /opt/miner/miner-noappend.log```
    - ```restart-miner```: shutcut for ```sudo systemctl restart crypto-miner```
+
+### The One None Automated Point
+
+```xmr-stak``` does not log to a file and there is no command line option to do so.  You must run the miner which generates a
+```config.txt``` file.  In that file find the line ```"output_file" : "",``` and change it to 
+```"output_file" : "/opt/miner/miner-noappend.log",```. See: [Issue 1](https://github.com/DavidEWexler/crypto-mining-node/issues/1)
 
 ### How hard is it to change settings?
 
