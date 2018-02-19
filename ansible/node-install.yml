@@ -1,0 +1,14 @@
+---
+- hosts: 127.0.0.1
+  connection: local
+  
+  tasks:
+  - name: Install Node.js apt repo
+    shell: curl -sL https://deb.nodesource.com/setup_8.x | sudo -E bash -
+    become: yes
+  
+  - name: Install required packages
+    apt: name={{item}} state=latest
+    become: yes
+    with_items:
+         - nodejs

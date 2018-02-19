@@ -1,0 +1,8 @@
+---
+- import_playbook: configure.yml
+- import_playbook: nvidia-install.yml
+- import_playbook: zec-install.yml
+- import_playbook: eth-install.yml
+- import_playbook: xmr-install.yml
+- import_playbook: ccminer-install.yml
+- import_playbook: miner-service.yml

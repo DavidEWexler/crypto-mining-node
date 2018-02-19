@@ -1,0 +1,228 @@
+---
+- hosts: 127.0.0.1
+  connection: local
+  
+  vars:
+    install_dir: "/opt/miner"
+    env_user: "{{ lookup('env','USER') }}"
+  
+  tasks:
+  - name: Create Install Directory
+    file:
+      path: "{{ install_dir }}"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: 0755
+      state: directory
+    become: yes
+    
+  - name: Creating export.sh, where all the general settings are
+    copy:
+      content: |
+        #!/bin/bash
+        export EMAIL=`jq -r '.email' {{ install_dir }}/config.json`
+        
+        export DISPLAY=:0
+        export LD_LIBRARY_PATH=/usr/local/cuda/lib64
+        
+        export MINING=`jq -r '.mining' {{ install_dir }}/config.json`
+        if [ `jq -r '.nh_enabled' {{ install_dir }}/config.json` == "YES" ]
+        then
+          export START_MOD=-nh
+        else
+          export START_MOD=
+        fi
+
+        export BTC_ADDRESS=`jq -r '.btc_address' {{ install_dir }}/config.json`
+        export ZEC_ADDRESS=`jq -r '.zec_address' {{ install_dir }}/config.json`
+        export ETH_ADDRESS=`jq -r '.eth_address' {{ install_dir }}/config.json`
+        export XMR_ADDRESS=`jq -r '.xmr_address' {{ install_dir }}/config.json`
+
+        export TARGET_POWER=`jq -r '.target_watts' {{ install_dir }}/config.json`
+        export FAN_SPEED=`jq -r '.fan_speed' {{ install_dir }}/config.json`
+        export GPU_OC=`jq -r '.gpu_overclock' {{ install_dir }}/config.json`
+        export MEM_OC=`jq -r '.memory_overclock' {{ install_dir }}/config.json`
+        
+        export ETH_POOL=`jq -r '.eth_pool' {{ install_dir }}/config.json`
+        export XMR_POOL=`jq -r '.xmr_pool' {{ install_dir }}/config.json`
+        export ZEC_POOL=`jq -r '.zec_pool' {{ install_dir }}/config.json`
+        export ZEC_PORT=`jq -r '.zec_port' {{ install_dir }}/config.json`
+        export NH_REGION=`jq -r '.nh_region' {{ install_dir }}/config.json`        
+      dest: "{{ install_dir }}/export.sh"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: "u+rwx,g+r,o+r"
+
+  - name: Creating overclock.sh, where the calls to overclocking happens
+    copy:
+      content: | 
+        #! /bin/bash
+        
+        for MY_DEVICE in {0..7}
+        do
+                # Check if card exists
+                if nvidia-smi -i $MY_DEVICE >> /dev/null 2>&1; then
+        	        echo "Overclocking GPU$MY_DEVICE to +$GPU_OC GPU/+$MEM_OC MEM, Fan set to $FAN_SPEED%"
+        	        # Fan speed
+        	        nvidia-settings -a "[gpu:$MY_DEVICE]/GPUFanControlState=1" > /dev/null
+        	        nvidia-settings -a "[fan:$MY_DEVICE]/GPUTargetFanSpeed=$FAN_SPEED" > /dev/null
+               		# Graphics clock
+        	        nvidia-settings -a "[gpu:$MY_DEVICE]/GPUGraphicsClockOffset[3]=$GPU_OC" > /dev/null
+        	        # Memory clock
+        	        nvidia-settings -a "[gpu:$MY_DEVICE]/GPUMemoryTransferRateOffset[3]=$MEM_OC"> /dev/null
+                fi
+        done
+      dest: "{{ install_dir }}/overclock.sh"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: "u+rwx,g+r,o+r"
+      
+  - name: Creating miner.sh, which starts up a miner
+    copy:
+      content: | 
+        #! /bin/bash
+        
+        rm {{ install_dir }}/miner-noappend.log
+        source {{ install_dir }}/export.sh
+        {{ install_dir }}/overclock.sh        
+
+        cd {{ install_dir }}/$MINING 
+        ./start$START_MOD.sh
+      dest: "{{ install_dir }}/mine.sh"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: "u+rwx,g+r,o+r"
+      
+  - name: Creating power.sh, which controls TDP (Watts)
+    copy:
+      content: | 
+        #! /bin/bash
+
+        source {{ install_dir }}/export.sh
+
+        # Enable Nvidia Persistence mode
+        sudo nvidia-smi -pm 1
+        
+        # Set the power level for all nvidia cards
+        sudo nvidia-smi -pl $TARGET_POWER      
+      dest: "{{ install_dir }}/power.sh"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: "u+rwx,g+r,o+r"
+      
+  - name: Creating monitor.sh, which monitors the minor for failures or changes
+    copy:
+      content: | 
+        #! /bin/bash
+        
+        while true; do 
+          # Check if there is an error 
+          if grep "ERROR" /opt/miner/miner-noappend.log >> /dev/null 2>&1; then
+            echo "Error in miner, restarting"
+            systemctl restart crypto-miner
+          fi
+          # Check if there are new settings
+          if [ -f /opt/miner/config_new.json ]; then
+            echo "New Miner Setting Founds, installing and restarting miner services"
+            mv -f /opt/miner/config_new.json /opt/miner/config.json
+            systemctl start nvidia-power
+            systemctl restart crypto-miner
+          fi
+          sleep 5
+        done
+      dest: "{{ install_dir }}/monitor.sh"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: "u+rwx,g+r,o+r"      
+  
+  - name: Creating crypto-mining systemd start unit
+    copy:
+      content: | 
+        #
+        # Basic crypto mining service, starts the miner
+        #
+        [Unit]
+        Description=Crypto Mining Service
+        After=xorg.target
+        
+        [Service]
+        ExecStart={{ install_dir }}/mine.sh
+        Restart=always
+        RestartSec=10
+        User={{ env_user }}
+        
+        [Install]
+        WantedBy=multi-user.target
+      dest: "/lib/systemd/system/crypto-miner.service"
+      owner: "root"
+      group: "root"
+      mode: "u+rw,g+r,o+r"
+    become: yes
+    
+  - name: Creating crypto-monitor systemd start unit
+    copy:
+      content: | 
+        #
+        # Basic crypto mining monitor service, monitors the miner for failures/changes
+        #
+        [Unit]
+        Description=Crypto Mining Monitor Service
+        After=xorg.target
+        
+        [Service]
+        ExecStart={{ install_dir }}/monitor.sh
+        Restart=always
+        RestartSec=10
+        
+        [Install]
+        WantedBy=multi-user.target
+      dest: "/lib/systemd/system/crypto-monitor.service"
+      owner: "root"
+      group: "root"
+      mode: "u+rw,g+r,o+r"
+    become: yes
+    
+  - name: Creating nvidia-power systemd start unit
+    copy:
+      content: | 
+        #
+        # Basic controls for NVIDIA power usage
+        #
+        [Unit]
+        Description=NVIDIA Power Control
+        After=xorg.target
+        
+        [Service]
+        Type=oneshot
+        ExecStart={{ install_dir }}/power.sh
+        
+        [Install]
+        WantedBy=multi-user.target
+      dest: "/lib/systemd/system/nvidia-power.service"
+      owner: "root"
+      group: "root"
+      mode: "u+rw,g+r,o+r"
+    become: yes
+
+  - name: Update and Restart Systemd services
+    command: "{{ item }}"
+    become: yes
+    with_items:
+      - systemctl daemon-reload
+      - systemctl enable nvidia-power      
+      - systemctl enable crypto-monitor
+      - systemctl enable crypto-miner
+      - systemctl stop crypto-monitor      
+      - systemctl stop crypto-miner
+      - systemctl start nvidia-power
+      - systemctl start crypto-miner
+      - systemctl start crypto-monitor     
+
+  - name: Adding useful aliases to .bashrc
+    lineinfile:
+      path: "~/.bashrc"
+      line: "alias {{ item.name }}=\"{{ item.cmd }}\""
+    with_items:
+      - { name: 'watch-miner', cmd: 'tail -f /opt/miner/miner-noappend.log' }
+      - { name: 'restart-miner', cmd: 'sudo systemctl restart crypto-miner' }
+      - { name: 'ap', cmd: 'ansible-playbook -K' }

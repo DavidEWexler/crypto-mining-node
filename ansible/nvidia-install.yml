@@ -1,0 +1,91 @@
+---
+- hosts: 127.0.0.1
+  connection: local
+  
+  vars:
+    install_dir: "/opt/miner/nvidia"
+    env_user: "{{ lookup('env','USER') }}"
+  
+  tasks: 
+  - name: Install required packages
+    apt: name={{item}} state=latest
+    become: yes
+    with_items:
+         - curl
+         - gcc
+         - build-essential
+         - xorg
+         - openbox
+  
+  - name: Create Install Directory
+    file:
+      path: "{{ install_dir }}"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: 0755
+      state: directory
+    become: yes
+  
+  - name: Download NVIDIA CUDA deb file
+    get_url:
+      url: https://developer.nvidia.com/compute/cuda/9.1/Prod/local_installers/cuda_9.1.85_387.26_linux
+      dest: "{{ install_dir }}/cuda_9.1.85_387.26_linux.run"
+      checksum: md5:67a5c3933109507df6b68f80650b4b4a
+      
+  - name: Instal NVIDIA Driver and CUDA
+    command: "{{ item }}"
+    become: yes
+    with_items:
+      - sh {{ install_dir }}/cuda_9.1.85_387.26_linux.run --silent --driver --toolkit
+ 
+  - name: Creating Xorg target
+    copy:
+      content: | 
+        #
+        # Xorg Server Target
+        #
+
+        [Unit]
+        Description=Basic Xorg server
+      dest: "/lib/systemd/system/xorg.target"
+      owner: "root"
+      group: "root"
+      mode: "u+rw,g+r,o+r"
+    become: yes
+    
+  - name: Creating Xorg systemd start unit
+    copy:
+      content: | 
+        #
+        # Minimal Xorg service file - launches Xorg as a dummy service.
+        # this is required because nvidia-settings requires an X Server
+        # to be operation in order to use the CMI. (WTF?)
+        #
+        # any service that needs an X Server connection needs to add 
+        # 'After=xorg.target' in the Unit descriptor
+
+        [Unit]
+        Description=Xorg server on :0, no tcp
+        Before=xorg.target
+
+        [Service]
+        ExecStart=/usr/bin/X :0 -ac -nolisten tcp -noreset -sharevts
+        Restart=always
+        RestartSec=10
+        
+        [Install]
+        WantedBy=multi-user.target
+      dest: "/lib/systemd/system/xorg.service"
+      owner: "root"
+      group: "root"
+      mode: "u+rw,g+r,o+r"
+    become: yes
+    
+  - name: Update Xorg Config and restart X, Run this whenever you install new GPUs
+    command: "{{ item }}"
+    become: yes
+    with_items:
+      - nvidia-xconfig -a --allow-empty-initial-configuration --cool-bits=31 --use-display-device="DFP-0" --connected-monitor="DFP-0"
+      - systemctl enable xorg
+      - systemctl stop xorg
+      - systemctl start xorg

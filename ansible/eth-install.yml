@@ -1,0 +1,63 @@
+---
+- hosts: 127.0.0.1
+  connection: local
+  
+  vars:
+    install_dir: "/opt/miner/eth"
+    env_user: "{{ lookup('env','USER') }}"
+  
+  tasks: 
+  - name: Install required packages
+    apt: name={{item}} state=latest
+    become: yes
+    with_items:
+         - curl
+  
+  - name: Create Install Directory
+    file:
+      path: "{{ install_dir }}"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: 0755
+      state: directory
+    become: yes  
+  
+  - name: Download and Install ETH Miner
+    unarchive:
+      src: https://github.com/nanopool/Claymore-Dual-Miner/releases/download/v10.0/Claymore.s.Dual.Ethereum.Decred_Siacoin_Lbry_Pascal.AMD.NVIDIA.GPU.Miner.v10.0.-.LINUX.tar.gz
+      dest: "{{ install_dir }}"
+      remote_src: yes
+    
+  - name: Creating ETH Standard Pool Start Script
+    copy:
+      content: | 
+        #! /bin/bash
+        
+        export GPU_FORCE_64BIT_PTR=0
+        export GPU_MAX_HEAP_SIZE=100
+        export GPU_USE_SYNC_OBJECTS=1
+        export GPU_MAX_ALLOC_PERCENT=100
+        export GPU_SINGLE_ALLOC_PERCENT=100
+        
+        ./ethdcrminer64 -epool $ETH_POOL -ewal $ETH_ADDRESS/$HOSTNAME/$EMAIL -mode 1 -logfile {{ install_dir }}/../miner-noappend.log
+      dest: "{{ install_dir }}/start.sh"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: "u+rwx,g+r,o+r"
+      
+  - name: Creating ETH Nicehash Start Script
+    copy:
+      content: |
+        #! /bin/bash
+        
+        export GPU_FORCE_64BIT_PTR=0
+        export GPU_MAX_HEAP_SIZE=100
+        export GPU_USE_SYNC_OBJECTS=1
+        export GPU_MAX_ALLOC_PERCENT=100
+        export GPU_SINGLE_ALLOC_PERCENT=100
+        
+        ./ethdcrminer64 -epool stratum+tcp://daggerhashimoto.$NH_REGION.nicehash.com:3353 -ewal $BTC_ADDRESS.$HOSTNAME -epsw x -esm 3 -allpools 1 -estale 0 -dpool stratum+tcp://decred.$NH_REGION.nicehash.com:3354 -dwal $BTC_ADDRESS.$HOSTNAME -logfile {{ install_dir }}/../miner-noappend.log
+      dest: "{{ install_dir }}/start-nh.sh"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: "u+rwx,g+r,o+r"

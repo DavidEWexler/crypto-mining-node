@@ -1,0 +1,55 @@
+---
+- hosts: 127.0.0.1
+  connection: local
+  
+  vars:
+    install_dir: "/opt/miner/zec"
+    env_user: "{{ lookup('env','USER') }}"
+  
+  vars_prompt:
+    - name: "dev_fee"
+      prompt: "Developer Fee"
+      default: "2.0"
+      private: no
+      
+  tasks: 
+  - name: Install required packages
+    apt: name={{item}} state=latest
+    become: yes
+    with_items:
+         - curl
+  
+  - name: Create Install Directory
+    file:
+      path: "{{ install_dir }}"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: 0755
+      state: directory
+    become: yes  
+  
+  - name: Download and Install ZEC Miner
+    unarchive:
+      src: https://github.com/nanopool/ewbf-miner/releases/download/v0.3.4b/Zec.miner.0.3.4b.Linux.Bin.tar.gz
+      dest: "{{ install_dir }}"
+      remote_src: yes
+    
+  - name: Creating ZEC Standard Pool Start Script
+    copy:
+      content: | 
+        #! /bin/bash
+        ./miner --server $ZEC_POOL --user $ZEC_ADDRESS.$HOSTNAME/$EMAIL --pass z --port $ZEC_PORT --fee {{ dev_fee }} --log 2 --logfile {{ install_dir }}/../miner-noappend.log
+      dest: "{{ install_dir }}/start.sh"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: "u+rwx,g+r,o+r"
+      
+  - name: Creating ZEC Nicehash Start Script
+    copy:
+      content: |
+        #! /bin/bash
+        ./miner --server equihash.$NH_REGION.nicehash.com --user $BTC_ADDRESS.$HOSTNAME --pass x --port 3357 --fee {{ dev_fee }} --log 2 --logfile {{ install_dir }}/../miner-noappend.log
+      dest: "{{ install_dir }}/start-nh.sh"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: "u+rwx,g+r,o+r"

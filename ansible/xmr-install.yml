@@ -1,0 +1,110 @@
+---
+- hosts: 127.0.0.1
+  connection: local
+  
+  vars:
+    xmr_dir: "/home/{{ lookup('env','USER') }}/xmr"
+    install_dir: "/opt/miner/xmr"
+    env_user: "{{ lookup('env','USER') }}"
+  
+  vars_prompt:
+    - name: "dev_fee"
+      prompt: "Developer Fee"
+      default: "2.0"
+      private: no
+      
+  tasks: 
+  - name: Install required packages
+    apt: name={{item}} state=latest
+    become: yes
+    with_items:
+         - libmicrohttpd-dev
+         - libssl-dev
+         - cmake
+         - build-essential
+         - libhwloc-dev
+         - ocl-icd-libopencl1
+         - opencl-headers
+         - clinfo
+         - ocl-icd-opencl-dev
+  
+  - name: Cloning xmr-stak git repo
+    git:
+      repo: https://github.com/fireice-uk/xmr-stak.git
+      dest: "{{ xmr_dir }}"
+      force: yes
+    
+  - name: Updating Dev Fee to {{ dev_fee }}
+    replace:
+      dest: "{{ xmr_dir }}/xmrstak/donate-level.hpp"
+      regexp: '2.0'
+      replace: "{{ dev_fee }}"
+    
+  - name: Create Build Directory
+    file:
+      path: "{{ xmr_dir }}/build"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: 0755
+      state: directory
+    
+  - name: Build xmr-stak
+    command: "{{ item }} chdir={{ xmr_dir }}/build"
+    with_items:
+      - cmake ..
+      - make install
+      
+  - name: Create Install Directory
+    file:
+      path: "{{ install_dir }}"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: 0755
+      state: directory
+    become: yes
+      
+  - name: Installing XMR Software
+    # Using shell over copy as it preserves permissions and modes
+    shell: cp {{ xmr_dir }}/build/bin/* {{ install_dir }}
+    
+  - name: Creating XRM GPU Standard Pool Start Script
+    copy:
+      content: | 
+        #! /bin/bash
+        ./xmr-stak --currency monero --noCPU -O $XMR_POOL -u $XMR_ADDRESS.$HOSTNAME/$EMAIL -p x
+      dest: "{{ install_dir }}/start.sh"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: "u+rwx,g+r,o+r"
+      
+  - name: Creating XRM CPU Standard Pool Start Script
+    copy:
+      content: |
+        #! /bin/bash
+        # Launch the miner on the lowest priority setting
+        nice -19 ./xmr-stak --currency monero --noAMD --noNVIDIA -O $XMR_POOL -u $XMR_ADDRESS.$HOSTNAME/$EMAIL -p x
+      dest: "{{ install_dir }}/start-cpu.sh"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: "u+rwx,g+r,o+r"     
+      
+  - name: Creating XRM GPU Nicehash Start Script
+    copy:
+      content: |
+        #! /bin/bash
+        ./xmr-stak --currency monero --noCPU -O cryptonight.$NH_REGION.nicehash.com:33355 -u $BTC_ADDRESS.$HOSTNAME -p x --use-nicehash
+      dest: "{{ install_dir }}/start-nh.sh"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: "u+rwx,g+r,o+r"
+      
+  - name: Creating XRM CPU Nicehash Start Script
+    copy:
+      content: |
+        #! /bin/bash
+        # Launch the miner on the lowest priority setting
+        nice -19 ./xmr-stak --currency monero --noAMD --noNVIDIA -O cryptonight.$NH_REGION.nicehash.com:33355 -u $BTC_ADDRESS.$HOSTNAME -p x --use-nicehash
+      dest: "{{ install_dir }}/start-nh-cpu.sh"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: "u+rwx,g+r,o+r"

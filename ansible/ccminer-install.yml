@@ -1,0 +1,79 @@
+---
+- hosts: 127.0.0.1
+  connection: local
+  
+  vars:
+    ccminer_dir: "/home/{{ lookup('env','USER') }}/ccminer"
+    install_dir: "/opt/miner/ccminer"
+    base_dir: "/opt/miner"
+    env_user: "{{ lookup('env','USER') }}"
+  
+  tasks: 
+  - name: Install required packages
+    apt: name={{item}} state=latest
+    become: yes
+    with_items:
+         - libcurl4-openssl-dev
+         - libssl-dev
+         - libjansson-dev
+         - automake
+         - autotools-dev
+         - build-essential
+  
+  - name: Cloning ccminer git repo
+    git:
+      repo: https://github.com/tpruvot/ccminer.git
+      dest: "{{ ccminer_dir }}"
+      force: yes
+      
+  - name: Build ccminer
+    shell: "{{ item }} chdir={{ ccminer_dir }}"
+    with_items:
+      - ./build.sh
+      
+  - name: Create Install Directory
+    file:
+      path: "{{ install_dir }}"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: 0755
+      state: directory
+    become: yes
+      
+  - name: Installing ccminer Software
+    # Using shell over copy as it preserves permissions and modes
+    shell: cp {{ ccminer_dir }}/ccminer {{ install_dir }}
+    
+  - name: Create Algo Directories
+    file:
+      path: "{{ base_dir }}/{{ item }}"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: 0755
+      state: directory
+    become: yes
+    with_items:
+      - neoscrypt
+      - lyra2rev2
+      - nist5
+      - skunk
+      - x11
+      - lbry
+    
+
+  - name: Create Algo Nicehash Start Scripts
+    copy:
+      content: |
+        #! /bin/bash
+        ../ccminer/ccminer -a {{ item.algo }} -o stratum+tcp://{{ item.name }}.$NH_REGION.nicehash.com:{{ item.port }} -u $BTC_ADDRESS.$HOSTNAME -p x > {{ base_dir }}/miner-noappend.log
+      dest: "{{ base_dir }}/{{ item.name }}/start-nh.sh"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: "u+rwx,g+r,o+r"
+    with_items:
+      - { algo: 'neoscrypt', name: 'neoscrypt', port: '3341' }
+      - { algo: 'lyra2v2', name: 'lyra2rev2', port: '3347' }
+      - { algo: 'nist5', name: 'nist5', port: '3340' }
+      - { algo: 'skunk', name: 'skunk', port: '3362' }
+      - { algo: 'x11', name: 'x11', port: '3336' }
+      - { algo: 'lbry', name: 'lbry', port: '3356' }

@@ -1,0 +1,172 @@
+---
+- hosts: 127.0.0.1
+  connection: local
+  
+  vars:
+    install_dir: "/opt/miner/webui"
+    cert_dir: "/opt/miner/certs"
+    env_user: "{{ lookup('env','USER') }}"
+  
+  vars_prompt:
+    - name: "cert_domain"
+      prompt: "Certificate Domain"
+      private: no
+      default: "Testing Domain"
+    - name: "cert_email"
+      prompt: "Certificate Admin email"
+      private: no
+      default: "admin@localhost"
+    - name: "web_port"
+      prompt: "Web Port, SSL will be enabled"
+      private: no
+      default: 8443
+    - name: "user_name"
+      prompt: "Web UI User Name"
+      private: no
+      default: "admin"
+    - name: "user_password"
+      prompt: "Web UI Password (Stored in Plain Text O.o)"
+      private: yes 
+    - name: "min_power"
+      prompt: "Minimum GPU Power (Watts)"
+      default: "80"
+      private: no 
+    - name: "max_power"
+      prompt: "Maximum GPU Power (Watts)"
+      default: "150"
+      private: no 
+    - name: "min_fan_speed"
+      prompt: "Minimum Fan Speed (Percent)"
+      default: "50"
+      private: no 
+    - name: "max_fan_speed"
+      prompt: "Max Fan Speed (Percent)"
+      default: "100"
+      private: no 
+    - name: "max_gpu_oc"
+      prompt: "Maximum GPU Overclock (Mhz)"
+      default: "0"
+      private: no 
+    - name: "max_mem_oc"
+      prompt: "Maximum Memory Overclock (Mhz)"
+      default: "0"
+      private: no 
+    - name: "rate_limit"
+      prompt: "Request Rate Limit (per 15 minutes, 0=no limit)"
+      default: "0"
+      private: no           
+
+  tasks:         
+  - name: Create Install Directories
+    file:
+      path: "{{ item }}"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: 0755
+      state: directory
+    become: yes
+    with_items:
+      - "{{ install_dir }}"
+      - "{{ cert_dir }}"
+    
+  - name: Cloning mining-frontail git repo
+    git:
+      repo: https://github.com/DavidEWexler/mining-frontail.git
+      dest: "{{ install_dir }}"
+      force: yes
+      
+  - name: npm install
+    shell: "{{ item }} chdir={{ install_dir }}"
+    become: yes
+    with_items:
+      - npm install
+      - npm test
+      - npm link
+      
+  - name: Create openssl configuration file
+    copy:
+      content: | 
+        [req]
+        default_bits = 2048
+        prompt = no
+        default_md = sha256
+        distinguished_name = dn
+        
+        [dn]
+        C=US
+        ST=New York
+        L=Rochester
+        O=End Point
+        OU={{ cert_domain }}
+        emailAddress={{ cert_email }}
+        CN = localhost
+      dest: "{{ cert_dir }}/server.csr.cnf"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: "u+rw,g+r,o+r"
+
+  - name: Create openssl X509 v3 file
+    copy:
+      content: | 
+        authorityKeyIdentifier=keyid,issuer
+        basicConstraints=CA:FALSE
+        keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
+        subjectAltName = @alt_names
+        
+        [alt_names]
+        DNS.1 = localhost
+      dest: "{{ cert_dir }}/v3.ext"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: "u+rw,g+r,o+r"
+
+  - name: generate self signed X509 v3 certs
+    shell: "{{ item }} chdir={{ cert_dir }}"
+    become: yes
+    with_items:
+      - openssl genrsa -des3 -out rootCA.key -passout pass:{{ user_password }} 2048
+      - openssl req -x509 -new -nodes -key rootCA.key -sha256 -days 9999 -out rootCA.pem -passin pass:{{ user_password }} -config server.csr.cnf
+      - openssl req -new -sha256 -nodes -out server.csr -newkey rsa:2048 -keyout server.key -config server.csr.cnf
+      - openssl x509 -req -in server.csr -CA rootCA.pem -CAkey rootCA.key -CAcreateserial -out server.crt -days 9998 -sha256 -extfile v3.ext -passin pass:{{ user_password }}
+      
+  - name: Creating Web UI Start Script
+    copy:
+      content: | 
+        #! /bin/bash
+        mining-frontail -p {{ web_port }} -U {{ user_name }} -P {{ user_password }} -k {{ cert_dir }}/server.key -c {{ cert_dir }}/server.crt --min-power {{ min_power }} --max-power {{ max_power }} --min-fan-speed {{ min_fan_speed }} --max-fan-speed {{ max_fan_speed }} --max-gpu-oc {{ max_gpu_oc }} --max-mem-oc {{ max_mem_oc }} /opt/miner/miner-noappend.log
+      dest: "{{ install_dir }}/start.sh"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: "u+rwx,g+r,o+r"
+      
+  - name: Creating crypto-webui systemd start unit
+    copy:
+      content: | 
+        #
+        # Web front end for monitoring and updating mining software
+        #
+        [Unit]
+        Description=Crypto Web UI
+        After=xorg.target
+        
+        [Service]
+        ExecStart={{ install_dir }}/start.sh
+        Restart=always
+        RestartSec=10
+        
+        [Install]
+        WantedBy=multi-user.target
+      dest: "/lib/systemd/system/crypto-webui.service"
+      owner: "root"
+      group: "root"
+      mode: "u+rw,g+r,o+r"
+    become: yes
+
+  - name: Update and Restart Systemd services
+    command: "{{ item }}"
+    become: yes
+    with_items:
+      - systemctl daemon-reload
+      - systemctl enable crypto-webui
+      - systemctl stop crypto-webui
+      - systemctl start crypto-webui

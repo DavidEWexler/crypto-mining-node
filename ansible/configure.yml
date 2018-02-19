@@ -1,0 +1,105 @@
+---
+- hosts: 127.0.0.1
+  connection: local
+  
+  vars:
+    install_dir: "/opt/miner"
+    env_user: "{{ lookup('env','USER') }}"
+  
+  vars_prompt:
+    - name: "email"
+      prompt: "Email address (used for nanopool notifications)"
+      private: no
+    - name: "btc_address"
+      prompt: "Bitcoin Address"
+      default: "15PU6ptEcAKvnN5tEToQrwDxPdgYLYDcnn"
+      private: no 
+    - name: "zec_address"
+      prompt: "ZCash Address"
+      default: "t1Vr9VrkKe5yVbDYKXaivUhUYJzRLgwawfP"
+      private: no 
+    - name: "eth_address"
+      prompt: "Ethereum Address"
+      default: "0x2c1A963C889D3D0979ee1AD4559A6A45a1461Aa5"
+      private: no 
+    - name: "xmr_address"
+      prompt: "Monero Address"
+      default: "4JUdGzvrMFDWrUUwY3toJATSeNwjn54LkCnKBPRzDuhzi5vSepHfUckJNxRL2gjkNrSqtCoRUrEDAgRwsQvVCjZbS1rhs5SkvzFNAEDqAe"
+      private: no 
+    - name: "target_watts"
+      prompt: "Target TDP (Watts)"
+      default: "150"
+      private: no 
+    - name: "fan_speed"
+      prompt: "Fan Speed (Percentage)"
+      default: "75"
+      private: no 
+    - name: "gpu_overclock"
+      prompt: "GPU Overclock (Mhz)"
+      default: "0"
+      private: no 
+    - name: "memory_overclock"
+      prompt: "Memory Overclock (Mhz)"
+      default: "0"
+      private: no      
+    - name: "eth_pool"
+      prompt: "ETH Pool (URL)"
+      default: "eth-us-east1.nanopool.org:9999"
+      private: no
+    - name: "xmr_pool"
+      prompt: "XMR Pool (TLS URL)"
+      default: "xmr-us-east1.nanopool.org:14433"
+      private: no
+    - name: "zec_pool"
+      prompt: "ZEC Pool (Server, Not URL)"
+      default: "zec-us-east1.nanopool.org"
+      private: no
+    - name: "zec_port"
+      prompt: "ZEC Port"
+      default: "6666"
+      private: no      
+    - name: "nh_region"
+      prompt: "Nicehash Region"
+      default: "usa"
+      private: no
+    - name: "mining"
+      prompt: "What to Mine?"
+      default: "zec"
+      private: no
+    - name: "nh_enabled"
+      prompt: "Nicehash Enabled?"
+      default: "YES"
+      private: no      
+
+  tasks:
+  - name: Install required packages
+    apt: name={{item}} state=latest
+    become: yes
+    with_items:
+         - jq
+  
+  - name: Creating Json Configuration File
+    copy:
+      content: | 
+        {
+          "email": "{{ email }}",
+          "btc_address": "{{ btc_address }}",
+          "zec_address": "{{ zec_address }}",
+          "eth_address": "{{ eth_address }}",
+          "xmr_address": "{{ xmr_address }}",
+          "target_watts": {{ target_watts }},
+          "fan_speed": {{ fan_speed }},
+          "gpu_overclock": {{ gpu_overclock }},
+          "memory_overclock": {{ memory_overclock }},
+          "eth_pool": "{{ eth_pool }}",
+          "xmr_pool": "{{ xmr_pool }}",
+          "zec_pool": "{{ zec_pool }}",
+          "zec_port": "{{ zec_port }}",
+          "nh_region": "{{ nh_region }}",
+          "mining": "{{ mining }}",
+          "nh_enabled": "{{ nh_enabled }}"
+        }
+      dest: "{{ install_dir }}/config.json"
+      owner: "{{ env_user }}"
+      group: "{{ env_user }}"
+      mode: "u+rw,g+r,o+r"
