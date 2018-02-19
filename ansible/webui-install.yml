@@ -153,6 +153,7 @@
         ExecStart={{ install_dir }}/start.sh
         Restart=always
         RestartSec=10
+        User={{ env_user }}
         
         [Install]
         WantedBy=multi-user.target
