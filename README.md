@@ -18,7 +18,7 @@ mining with [Nvidia](https://www.nvidida.com/) based GPUs.
 This project is the first step in a personal project I'm calling ```Auto Mining``` the goal of which is to automate all parts
 of the mining process.  The basic outline of which is:
 
- 1. Automate software install (this)
+ 1. **Automate software install (this)**
  2. Automate gpu tuning per card
  3. Automate coin, pool, algo choices
  4. Wrap everything up in [kubernetes](https://kubernetes.io/)
