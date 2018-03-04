@@ -2,8 +2,8 @@
 - hosts: 127.0.0.1
   connection: local
 
-tasks:
-- name: Update Xorg Config and restart X, Run this whenever you install new GPUs
+  tasks:
+  - name: Update Xorg Config and restart X, Run this whenever you install new GPUs
     command: "{{ item }}"
     become: yes
     with_items:
